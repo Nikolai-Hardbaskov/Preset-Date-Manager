@@ -85,7 +85,15 @@ select.pdm-original {
 .pdm-sort { flex: 0 1 200px; }
 .pdm-note { margin: 0; padding: 2px 16px 10px; opacity: .73; font-size: .73rem; line-height: 1.35; }
 .pdm-list { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.pdm-item-wrap {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+    border-top: 1px solid #8885;
+}
 .pdm-item {
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -94,7 +102,7 @@ select.pdm-original {
     padding: 12px 16px;
     margin: 0;
     border: 0;
-    border-top: 1px solid #8885;
+    border-top: 0;
     border-radius: 0;
     background: transparent;
     color: inherit;
@@ -117,3 +125,18 @@ select.pdm-original {
     .pdm-search, .pdm-sort { flex: none; width: 100%; }
     .pdm-item { min-height: 66px; }
 }
+
+.pdm-date-edit {
+    flex: 0 0 44px;
+    min-width: 44px;
+    border: 0;
+    border-left: 1px solid #8884;
+    border-radius: 0;
+    padding: 8px;
+    background: transparent;
+    color: var(--SmartThemeBodyColor, #eee);
+    font-size: 1.3rem;
+    cursor: pointer;
+}
+.pdm-date-edit:hover { background: #aaa2; }
+.pdm-date-edit:focus-visible { outline: 2px solid #b78bab; outline-offset: -3px; }
