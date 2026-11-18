@@ -7,8 +7,9 @@
 
     const NS = 'preset-date-manager';
     const SELECTOR = 'select[data-preset-manager-for]';
-    const ENDPOINT = '/api/plugins/preset-date-manager/dates';
     const PREFS_KEY = 'pdm:prefs:v1';
+    const DATES_STORAGE_KEY = 'preset-date-manager';
+    const DATES_FALLBACK_KEY = 'pdm:dates:v2';
     const MODES = ['newest', 'oldest', 'az', 'za'];
     const TITLES = {
         openai: 'Chat Completion',
@@ -25,10 +26,7 @@
     let active = null;
     let modal = null;
     let lastFocus = null;
-    let metadata = {};
-    let metadataReady = false;
-    let lastFetch = 0;
-    let fetching = null;
+    let localBackup = null;
     let scheduled = false;
     let previousOverflow = null;
 
@@ -70,16 +68,64 @@
         }));
     }
 
-    function details(api, name) {
-        // Server plugin reads the current user's own preset directory.
-        return metadata?.[api]?.[name] ?? null;
+    // Preset creation/import dates are not included in SillyTavern's regular preset API.
+    // Store the first moment this extension sees each preset in the user's normal
+    // SillyTavern extension settings. No server plugin, filesystem access or new API required.
+    function getDateStore() {
+        const context = window.SillyTavern?.getContext?.();
+        const settings = context?.extensionSettings;
+        if (settings && typeof settings === 'object') {
+            const holder = settings[DATES_STORAGE_KEY] ??= { dates: {} };
+            if (!holder.dates || typeof holder.dates !== 'object') holder.dates = {};
+            return holder;
+        }
+        if (!localBackup) {
+            try {
+                localBackup = JSON.parse(localStorage.getItem(DATES_FALLBACK_KEY) || '{}');
+            } catch {
+                localBackup = {};
+            }
+            localBackup.dates ||= {};
+        }
+        return localBackup;
+    }
+
+    function saveDateStore() {
+        const context = window.SillyTavern?.getContext?.();
+        if (context?.extensionSettings && typeof context.saveSettingsDebounced === 'function') {
+            context.saveSettingsDebounced();
+        } else {
+            try {
+                localStorage.setItem(DATES_FALLBACK_KEY, JSON.stringify(getDateStore()));
+            } catch (error) {
+                console.warn('[Preset Date Manager] Cannot persist dates:', error);
+            }
+        }
+    }
+
+    function getRecord(api, name) {
+        return getDateStore().dates?.[api]?.[name] ?? null;
+    }
+
+    function watchNewPresets(select) {
+        const api = getApi(select);
+        if (!api) return;
+        const store = getDateStore();
+        const group = store.dates[api] ??= {};
+        const now = new Date().toISOString();
+        let changed = false;
+        for (const item of nativeItems(select)) {
+            if (!item.name || group[item.name]) continue;
+            group[item.name] = { at: now, source: 'first-seen' };
+            changed = true;
+        }
+        if (changed) saveDateStore();
     }
 
     function timestamp(api, name) {
-        const record = details(api, name);
-        if (!record || !record.createdAt) return null;
-        const date = new Date(record.createdAt);
-        const ms = date.valueOf();
+        const raw = getRecord(api, name)?.at;
+        if (!raw) return null;
+        const ms = new Date(raw).getTime();
         return Number.isFinite(ms) ? ms : null;
     }
 
@@ -90,35 +136,58 @@
     }
 
     function dateNote(api, name) {
-        const record = details(api, name);
-        if (!record) return 'Историческая дата неизвестна';
-        if (record.source === 'modified') return 'Дата изменения файла (не дата импорта)';
-        return 'Дата создания файла на сервере (может отличаться от даты импорта)';
+        const record = getRecord(api, name);
+        if (!record) return 'Дата неизвестна';
+        return record.source === 'manual'
+            ? 'Дата указана вручную'
+            : 'Впервые замечен расширением. Это может быть не дата импорта.';
     }
 
-    async function refreshMetadata(force = false) {
-        if (fetching) return fetching;
-        if (!force && metadataReady && Date.now() - lastFetch < 4000) return;
-        fetching = (async () => {
-            try {
-                const response = await fetch(ENDPOINT, { credentials: 'same-origin', cache: 'no-store' });
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                const json = await response.json();
-                if (!json || typeof json !== 'object' || !json.groups) throw new Error('Bad plugin response');
-                metadata = json.groups;
-                metadataReady = true;
-                lastFetch = Date.now();
-            } catch (error) {
-                metadataReady = false;
-                metadata = {};
-                console.debug('[Preset Date Manager] Server metadata not available:', error.message);
-            } finally {
-                fetching = null;
-                updateButtons();
-                if (active) renderList();
+    function displayDate(api, name) {
+        const record = getRecord(api, name);
+        const date = formatDate(timestamp(api, name));
+        return record?.source === 'manual'
+            ? date + ' · указана вручную'
+            : date + ' · первое обнаружение';
+    }
+
+    function changeDate(api, name) {
+        const old = timestamp(api, name);
+        const proposed = old === null ? '' : formatDate(old);
+        const input = prompt(
+            'Дата для пресета "' + name + '" в формате ДД.ММ.ГГГГ.\n' +
+            'Оставь поле пустым, чтобы сбросить дату на сегодняшнюю дату обнаружения.',
+            proposed,
+        );
+        if (input === null) return;
+        const text = input.trim();
+        let iso;
+        let source;
+        if (!text) {
+            iso = new Date().toISOString();
+            source = 'first-seen';
+        } else {
+            const match = /^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/.exec(text);
+            if (!match) {
+                alert('Некорректная дата. Введи её в формате ДД.ММ.ГГГГ');
+                return;
             }
-        })();
-        return fetching;
+            const [, dayText, monthText, yearText] = match;
+            const day = Number(dayText), month = Number(monthText), year = Number(yearText);
+            const date = new Date(Date.UTC(year, month - 1, day, 12));
+            if (year < 1900 || year > 9999 || date.getUTCFullYear() !== year ||
+                date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+                alert('Укажи существующую календарную дату');
+                return;
+            }
+            iso = date.toISOString();
+            source = 'manual';
+        }
+        const store = getDateStore();
+        (store.dates[api] ??= {})[name] = { at: iso, source };
+        saveDateStore();
+        updateButtons();
+        renderList();
     }
 
     function updateButtons() {
@@ -145,6 +214,7 @@
         select.classList.add('pdm-original');
         select.parentElement.insertBefore(button, select.nextSibling);
         replacements.set(select, button);
+        watchNewPresets(select);
         button.addEventListener('click', () => openModal(select));
         select.addEventListener('change', updateButtons);
         // ST triggers some changes with jQuery, which do not always reach DOM listeners.
@@ -152,6 +222,7 @@
             window.jQuery(select).on('change.presetDateManager', updateButtons);
         }
         const observer = new MutationObserver(() => {
+            watchNewPresets(select);
             updateButtons();
             if (active?.select === select) renderList();
         });
@@ -284,11 +355,10 @@
         const list = modal.querySelector('.pdm-list');
         const items = sortedItems();
         count.textContent = (TITLES[api] || api) + ' · ' + items.length + ' шт.';
-        note.textContent = metadataReady
-            ? 'Дата = создание файла на сервере; это не всегда точное время первоначального импорта.'
-            : 'Для дат уже существующих пресетов установи серверный модуль из архива.';
+        note.textContent = 'Для старых пресетов дата показывает первый запуск расширения, а не реальный импорт. Нажми ✎ рядом с датой, чтобы указать правильную.';
         const fragment = document.createDocumentFragment();
         for (const item of items) {
+            const shell = el('div', 'pdm-item-wrap');
             const row = el('button', 'pdm-item');
             row.type = 'button';
             row.setAttribute('role', 'option');
@@ -297,13 +367,12 @@
             if (item.value === select.value) row.classList.add('pdm-active');
             const text = el('span', 'pdm-item-content');
             text.append(el('span', 'pdm-item-name', item.name));
-            const date = el('small', 'pdm-item-date', formatDate(timestamp(api, item.name)));
+            const date = el('small', 'pdm-item-date', displayDate(api, item.name));
             date.title = dateNote(api, item.name);
             text.append(date);
             row.append(text, el('span', 'pdm-item-indicator', item.value === select.value ? '●' : '○'));
             row.addEventListener('click', () => {
                 if (select.value !== item.value) {
-                    // The original select and option labels remain unmodified.
                     const jquery = window.jQuery || window.$;
                     if (typeof jquery === 'function') {
                         jquery(select).val(item.value).trigger('change');
@@ -315,7 +384,13 @@
                 updateButtons();
                 closeModal();
             });
-            fragment.append(row);
+            const edit = el('button', 'pdm-date-edit', '✎');
+            edit.type = 'button';
+            edit.title = 'Изменить дату';
+            edit.setAttribute('aria-label', 'Изменить дату пресета ' + item.name);
+            edit.addEventListener('click', () => changeDate(api, item.name));
+            shell.append(row, edit);
+            fragment.append(shell);
         }
         if (!items.length) fragment.append(el('p', 'pdm-empty', 'Ничего не найдено'));
         list.replaceChildren(fragment);
@@ -333,7 +408,6 @@
         document.body.style.overflow = 'hidden';
         renderList();
         modal.querySelector('.pdm-search').focus({ preventScroll: true });
-        refreshMetadata(true);
     }
 
     function closeModal() {
@@ -364,7 +438,6 @@
                 if (type) context.eventSource.on(type, updateButtons);
             }
         }
-        refreshMetadata();
         console.info('[Preset Date Manager] Ready');
     }
 
