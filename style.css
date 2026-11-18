@@ -1,0 +1,119 @@
+/* Keep the original form control in the DOM. ST uses its option texts as IDs. */
+select.pdm-original {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+}
+.pdm-open {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 5px 10px;
+    border: 1px solid var(--SmartThemeBorderColor, #84647b);
+    border-radius: 8px;
+    background: var(--SmartThemeBlurTintColor, #252229);
+    color: var(--SmartThemeBodyColor, #eee);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+.pdm-open:focus-visible, .pdm-item:focus-visible {
+    outline: 2px solid #b78bab;
+    outline-offset: 2px;
+}
+.pdm-selected { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.pdm-current-name { display: block; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.pdm-current-date { font-size: .72em; opacity: .7; }
+.pdm-chevron { flex: none; font-size: 1.5em; line-height: 1; opacity: .8; }
+.pdm-overlay {
+    position: fixed;
+    z-index: 2147483000;
+    inset: 0;
+    background: rgba(0,0,0,.73);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.pdm-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(640px, 100%);
+    max-height: min(820px, 93dvh);
+    min-height: 240px;
+    padding: 0;
+    color: var(--SmartThemeBodyColor, #eee);
+    background: var(--SmartThemeBlurTintColor, #27292c);
+    border: 1px solid var(--SmartThemeBorderColor, #a183a0);
+    border-radius: 15px;
+    box-shadow: 0 15px 60px #0009;
+    overflow: hidden;
+    font: inherit;
+}
+.pdm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 7px;
+}
+.pdm-heading { display: flex; flex-direction: column; }
+.pdm-heading-title { font-size: 1.17rem; font-weight: 700; }
+.pdm-count { font-size: .8rem; opacity: .7; }
+.pdm-close { background: transparent; color: inherit; border: 0; font-size: 30px; padding: 1px 9px; cursor: pointer; }
+.pdm-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+.pdm-search, .pdm-sort {
+    flex: 1 1 190px;
+    min-width: 0;
+    border-radius: 8px;
+    padding: 9px 11px;
+    border: 1px solid var(--SmartThemeBorderColor, #756674);
+    background: var(--SmartThemeBlurTintColor, #242428);
+    color: var(--SmartThemeBodyColor, #fff);
+    font-size: 16px;
+}
+.pdm-sort { flex: 0 1 200px; }
+.pdm-note { margin: 0; padding: 2px 16px 10px; opacity: .73; font-size: .73rem; line-height: 1.35; }
+.pdm-list { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.pdm-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid #8885;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.pdm-item:hover, .pdm-active { background: #aaa2; }
+.pdm-item:disabled { opacity: .5; cursor: not-allowed; }
+.pdm-item-content { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.pdm-item-name { font-size: 1rem; line-height: 1.35; }
+.pdm-item-date { opacity: .7; font-size: .78rem; }
+.pdm-active .pdm-item-indicator { color: #68b8ef; }
+.pdm-item-indicator { font-size: 1.25rem; flex: none; opacity: .8; }
+.pdm-empty { text-align: center; padding: 20px; opacity: .75; }
+@media (max-width: 540px) {
+    .pdm-panel { max-height: 92dvh; }
+    .pdm-overlay { padding-left: 7px; padding-right: 7px; }
+    .pdm-toolbar { display: flex; flex-direction: column; }
+    .pdm-search, .pdm-sort { flex: none; width: 100%; }
+    .pdm-item { min-height: 66px; }
+}
