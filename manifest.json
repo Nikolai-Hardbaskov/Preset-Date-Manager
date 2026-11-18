@@ -1,0 +1,11 @@
+{
+  "display_name": "Preset Date Manager",
+  "loading_order": 100,
+  "js": "index.js",
+  "css": "style.css",
+  "author": "Community",
+  "version": "1.0.0",
+  "minimum_client_version": "1.12.0",
+  "homePage": "https://github.com/Nikolai-Hardbaskov/Preset-Date-Manager",
+  "auto_update": true
+}
